@@ -4,6 +4,16 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// Enable better error logging
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    process.exit(1);
+});
+
 // Validate required environment variables
 const requiredEnvVars = ['MONGODB_URI'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
@@ -53,16 +63,24 @@ app.use((req, res, next) => {
 
 // Add a simple root endpoint
 app.get('/', (req, res) => {
-    res.json({ status: 'ok', message: 'Server is running' });
+    res.json({ 
+        status: 'ok', 
+        message: 'Server is running',
+        mongodb: {
+            state: mongoose.connection.readyState,
+            host: mongoose.connection.host || 'not connected'
+        }
+    });
 });
 
 // Add health check endpoint
 app.get('/health', (req, res) => {
+    const dbState = mongoose.connection.readyState;
     res.json({ 
-        status: 'ok',
+        status: dbState === 1 ? 'ok' : 'connecting',
         timestamp: new Date().toISOString(),
         mongodb: {
-            state: mongoose.connection.readyState,
+            state: dbState,
             host: mongoose.connection.host || 'not connected'
         }
     });
@@ -94,8 +112,17 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'quiz-game-frontend/build', 'index.html'));
 });
 
+let server;
+let isConnecting = false;
+
 // MongoDB connection with retry logic
 const connectWithRetry = async () => {
+    if (isConnecting) {
+        console.log('Already attempting to connect to MongoDB...');
+        return;
+    }
+
+    isConnecting = true;
     const MONGODB_URI = process.env.MONGODB_URI;
     
     try {
@@ -116,25 +143,30 @@ const connectWithRetry = async () => {
         console.log('Host:', mongoose.connection.host);
         
         // Start the server only after MongoDB connects
-        startServer();
+        if (!server) {
+            startServer();
+        }
     } catch (err) {
         console.error('MongoDB connection error:', err);
         console.log('Retrying connection in 5 seconds...');
-        setTimeout(connectWithRetry, 5000);
+        setTimeout(() => {
+            isConnecting = false;
+            connectWithRetry();
+        }, 5000);
     }
 };
 
 // Handle MongoDB connection events
 mongoose.connection.on('error', (err) => {
     console.error('MongoDB connection error:', err);
+    isConnecting = false;
 });
 
 mongoose.connection.on('disconnected', () => {
     console.log('MongoDB disconnected. Attempting to reconnect...');
+    isConnecting = false;
     connectWithRetry();
 });
-
-let server;
 
 function startServer() {
     const PORT = process.env.PORT || 3000;

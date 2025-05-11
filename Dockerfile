@@ -59,17 +59,25 @@ COPY --from=frontend-builder /app/frontend/build ./quiz-game-frontend/build
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Create a simple startup script
 RUN echo '#!/bin/sh\n\
+echo "=== Environment Check ==="\n\
+echo "Node version: $(node -v)"\n\
+echo "NPM version: $(npm -v)"\n\
+echo "Environment: $NODE_ENV"\n\
+echo "Port: $PORT"\n\
+\n\
 if [ -z "$MONGODB_URI" ]; then\n\
     echo "Error: MONGODB_URI environment variable is not set"\n\
     echo "Please set MONGODB_URI in Railway dashboard"\n\
     exit 1\n\
 fi\n\
 \n\
-echo "Starting application..."\n\
-exec node server.js\n\
+echo "=== Starting Application ==="\n\
+# Start the application with proper logging\n\
+exec node --trace-warnings server.js\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Use tini as init process
