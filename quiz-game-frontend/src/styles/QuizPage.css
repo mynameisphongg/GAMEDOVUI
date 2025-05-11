@@ -1,0 +1,105 @@
+/* QuizPage.css */
+.quiz-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+    font-family: 'Arial', sans-serif;
+    color: #fff;
+    text-align: center;
+}
+
+h1 {
+    font-size: 2.5rem;
+    margin-bottom: 15px;
+    font-weight: bold;
+}
+
+.lives {
+    font-size: 1.8rem;
+    margin-bottom: 20px;
+}
+
+.loading {
+    font-size: 1.2rem;
+}
+
+button {
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.3s;
+    margin: 10px;
+    width: 80%;
+    max-width: 400px;
+}
+
+button:hover {
+    transform: scale(1.05);
+}
+
+/* 🔥 Hiệu ứng khi chọn đáp án đúng */
+button.correct {
+    background: #4caf50;
+    color: white;
+    animation: correctEffect 1s ease-in-out forwards;
+}
+
+/* 💥 Hiệu ứng khi chọn đáp án sai */
+button.wrong {
+    background: #f44336;
+    color: white;
+    animation: shakeEffect 0.5s ease-in-out forwards;
+}
+
+/* 🎯 Hiệu ứng chọn đúng (Xoay nhẹ + phóng to) */
+@keyframes correctEffect {
+    0% { transform: scale(1) rotate(0deg); background-color: #4caf50; }
+    50% { transform: scale(1.2) rotate(10deg); background-color: #66bb6a; }
+    100% { transform: scale(1) rotate(0deg); background-color: #4caf50; }
+}
+
+/* 🚨 Hiệu ứng chọn sai (Rung mạnh) */
+@keyframes shakeEffect {
+    0% { transform: translateX(0); }
+    10% { transform: translateX(-8px); }
+    20% { transform: translateX(8px); }
+    30% { transform: translateX(-8px); }
+    40% { transform: translateX(8px); }
+    50% { transform: translateX(-8px); }
+    60% { transform: translateX(8px); }
+    70% { transform: translateX(-8px); }
+    80% { transform: translateX(8px); }
+    90% { transform: translateX(-8px); }
+    100% { transform: translateX(0); }
+}
+
+/* 🎨 Hiệu ứng hover khi chưa chọn */
+.option {
+    padding: 10px;
+    margin: 5px;
+    border: 2px solid #ccc;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.option:hover {
+    background-color: #f0f0f0;
+}
+
+/* Khi chọn đúng */
+.option.correct {
+    background-color: #4caf50;
+    color: white;
+}
+
+/* Khi chọn sai */
+.option.wrong {
+    background-color: #f44336;
+    color: white;
+}
+
