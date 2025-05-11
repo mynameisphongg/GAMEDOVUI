@@ -85,13 +85,29 @@ const Game = () => {
   const [availableOptions, setAvailableOptions] = useState([]);
   const [audienceData, setAudienceData] = useState(null);
 
-  // Sound effects
-  const [playBgMusic, { stop: stopBgMusic }] = useSound(bgMusic, { 
-    volume: 0.3,
-    loop: true 
+  // Sound effects with lazy initialization
+  const [sounds, setSounds] = useState({
+    bgMusic: null,
+    correct: null,
+    wrong: null
   });
-  const [playCorrect] = useSound(correctSound, { volume: 0.5 });
-  const [playWrong] = useSound(wrongSound, { volume: 0.5 });
+
+  const initializeSounds = useCallback(() => {
+    if (!sounds.bgMusic) {
+      const [playBgMusic, { stop: stopBgMusic }] = useSound(bgMusic, { 
+        volume: 0.3,
+        loop: true 
+      });
+      const [playCorrect] = useSound(correctSound, { volume: 0.5 });
+      const [playWrong] = useSound(wrongSound, { volume: 0.5 });
+
+      setSounds({
+        bgMusic: { play: playBgMusic, stop: stopBgMusic },
+        correct: { play: playCorrect },
+        wrong: { play: playWrong }
+      });
+    }
+  }, [sounds.bgMusic]);
 
   // Timer effect
   useEffect(() => {
@@ -112,54 +128,72 @@ const Game = () => {
 
   // Start background music when game starts
   useEffect(() => {
-    if (gameStarted && !gameOver) {
-      playBgMusic();
-    } else {
-      stopBgMusic();
+    if (gameStarted && !gameOver && sounds.bgMusic) {
+      sounds.bgMusic.play();
+    } else if (sounds.bgMusic) {
+      sounds.bgMusic.stop();
     }
-    return () => stopBgMusic();
-  }, [gameStarted, gameOver, playBgMusic, stopBgMusic]);
+    return () => {
+      if (sounds.bgMusic) {
+        sounds.bgMusic.stop();
+      }
+    };
+  }, [gameStarted, gameOver, sounds.bgMusic]);
 
   const handleTimeUp = useCallback(() => {
-    playWrong();
+    if (sounds.wrong) {
+      sounds.wrong.play();
+    }
     setGameOver(true);
     setShowNameDialog(true);
-  }, [playWrong]);
+  }, [sounds.wrong]);
 
-  const loadQuestions = async () => {
+  const loadQuestions = async (retryCount = 0) => {
     try {
       setLoading(true);
       setError(null);
-      console.log('Loading questions for:', { category, difficulty });
+      console.log('Loading questions for:', { category, difficulty, retryCount });
       
       const response = await axios.get(API_ENDPOINTS.RANDOM_QUESTIONS(category, difficulty, 10), {
-        timeout: 10000, // 10 second timeout
+        timeout: 15000, // Tăng timeout lên 15 giây
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json'
+        },
+        validateStatus: function (status) {
+          return status >= 200 && status < 500; // Chấp nhận status từ 200-499
         }
       });
 
-      if (response.data && Array.isArray(response.data)) {
+      if (response.status === 200 && response.data && Array.isArray(response.data)) {
         console.log('Questions loaded successfully:', response.data.length);
+        if (response.data.length === 0) {
+          setError('Không có câu hỏi nào cho chủ đề và độ khó đã chọn.');
+          return false;
+        }
         setQuestions(response.data);
         setCurrentQuestion(0);
+        return true;
       } else {
-        console.error('Invalid response format:', response.data);
-        setError('Invalid response from server');
+        console.error('Invalid response:', response);
+        throw new Error('Invalid response from server');
       }
     } catch (err) {
       console.error('Error loading questions:', err);
-      if (err.response) {
-        // Server responded with error
-        setError(`Server error: ${err.response.status} - ${err.response.data?.message || 'Unknown error'}`);
-      } else if (err.request) {
-        // Request made but no response
-        setError('No response from server. Please try again.');
-      } else {
-        // Other errors
-        setError('Failed to load questions. Please try again.');
+      if (retryCount < 3) { // Thử lại tối đa 3 lần
+        console.log(`Retrying... (${retryCount + 1}/3)`);
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Đợi 2 giây trước khi thử lại
+        return loadQuestions(retryCount + 1);
       }
+      
+      if (err.response) {
+        setError(`Lỗi server: ${err.response.status} - ${err.response.data?.message || 'Không thể tải câu hỏi'}`);
+      } else if (err.request) {
+        setError('Không thể kết nối đến server. Vui lòng thử lại sau.');
+      } else {
+        setError('Có lỗi xảy ra khi tải câu hỏi. Vui lòng thử lại.');
+      }
+      return false;
     } finally {
       setLoading(false);
     }
@@ -167,24 +201,31 @@ const Game = () => {
 
   const startGame = async () => {
     try {
+      // Initialize sounds when user starts the game
+      initializeSounds();
+      
       setLoading(true);
       setError(null);
-      const response = await axios.get(API_ENDPOINTS.RANDOM_QUESTIONS(category, difficulty, 10));
-      setQuestions(response.data);
-      setGameStarted(true);
-      setCurrentQuestion(0);
-      setScore(0);
-      setTimeLeft(30);
-      setHintsUsed({
-        fiftyFifty: false,
-        timeHint: false,
-        audienceHint: false
-      });
-      setAvailableOptions([]);
-      setAudienceData(null);
+      
+      const success = await loadQuestions();
+      if (success) {
+        setGameStarted(true);
+        setScore(0);
+        setTimeLeft(30);
+        setHintsUsed({
+          fiftyFifty: false,
+          timeHint: false,
+          audienceHint: false
+        });
+        setAvailableOptions([]);
+        setAudienceData(null);
+      } else {
+        setGameStarted(false);
+      }
     } catch (err) {
-      console.error('Error loading questions:', err);
-      setError('Failed to load questions. Please try again.');
+      console.error('Error starting game:', err);
+      setError('Không thể bắt đầu game. Vui lòng thử lại.');
+      setGameStarted(false);
     } finally {
       setLoading(false);
     }
@@ -196,8 +237,8 @@ const Game = () => {
     setSelectedAnswer(answer);
     const isCorrect = answer === questions[currentQuestion].answer;
 
-    if (isCorrect) {
-      playCorrect();
+    if (isCorrect && sounds.correct) {
+      sounds.correct.play();
       const timeBonus = timeLeft / questions[currentQuestion].timeLimit;
       const difficultyMultiplier = {
         easy: 1,
@@ -207,8 +248,8 @@ const Game = () => {
       
       const points = Math.round(questions[currentQuestion].points * difficultyMultiplier * (1 + timeBonus));
       setScore(prev => prev + points);
-    } else {
-      playWrong();
+    } else if (!isCorrect && sounds.wrong) {
+      sounds.wrong.play();
     }
 
     // Reset các state liên quan đến gợi ý khi chuyển câu hỏi

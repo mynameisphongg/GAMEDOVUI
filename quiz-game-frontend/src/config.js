@@ -1,7 +1,7 @@
 // API Configuration
-const API_BASE_URL = 'https://gamedovuinp.up.railway.app';
+const API_BASE_URL = 'https://gamedovuinpn.up.railway.app';
 
-export const API_ENDPOINTS = {
+const API_ENDPOINTS = {
     QUESTIONS: `${API_BASE_URL}/api/questions`,
     PLAYERS: `${API_BASE_URL}/api/players`,
     LEADERBOARD: `${API_BASE_URL}/api/players/leaderboard`,
