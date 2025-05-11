@@ -22,19 +22,19 @@ mongoose.connect(MONGODB_URI, {
 const questionRoutes = require('./routes/questions');
 const playerRoutes = require('./routes/players');
 
-app.use('/questions', questionRoutes);
-app.use('/players', playerRoutes);
+// API routes
+app.use('/api/questions', questionRoutes);
+app.use('/api/players', playerRoutes);
 
-// Serve static files from the React app in production
-if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.join(__dirname, 'quiz-game-frontend/build')));
-    
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(__dirname, 'quiz-game-frontend/build/index.html'));
-    });
-}
+// Serve static files from the React app
+app.use(express.static(path.join(__dirname, 'quiz-game-frontend/build')));
 
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
+// Handle React routing, return all requests to React app
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'quiz-game-frontend/build', 'index.html'));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
 });
