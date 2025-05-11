@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 const Question = require('./models/Question');
 require('dotenv').config();
 
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/quiz_game', {
+const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz_game';
+mongoose.connect(uri, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 });

@@ -3,7 +3,7 @@ require('dotenv').config();
 
 // Connection strings
 const LOCAL_MONGODB_URI = 'mongodb://localhost:27017/quiz_game';
-const ATLAS_MONGODB_URI = 'mongodb+srv://nguyenthanhtungsexgay:NTT123@cluster1.rqsv34t.mongodb.net/quiz_game?retryWrites=true&w=majority';
+const ATLAS_MONGODB_URI = 'mongodb+srv://nguyenthanhtungsexgay:NTT123@cluster1.rqsv34t.mongodb.net/?retryWrites=true&w=majority&appName=Cluster1';
 
 // Connect to local MongoDB
 const localConnection = mongoose.createConnection(LOCAL_MONGODB_URI, {
