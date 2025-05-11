@@ -18,6 +18,13 @@ console.log('Environment:', process.env.NODE_ENV);
 console.log('Port:', process.env.PORT);
 console.log('Memory usage:', process.memoryUsage());
 
+// Debug environment variables
+console.log('=== Environment Variables Debug ===');
+console.log('MONGODB_URI exists:', !!process.env.MONGODB_URI);
+console.log('MONGODB_URI length:', process.env.MONGODB_URI ? process.env.MONGODB_URI.length : 0);
+console.log('MONGODB_URI starts with:', process.env.MONGODB_URI ? process.env.MONGODB_URI.substring(0, 20) + '...' : 'not set');
+console.log('All environment variables:', Object.keys(process.env));
+
 // Handle process signals
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
@@ -41,6 +48,7 @@ process.on('uncaughtException', (error) => {
 if (!process.env.MONGODB_URI) {
     console.error('=== Missing Environment Variables ===');
     console.error('MONGODB_URI is required');
+    console.error('Current environment variables:', process.env);
     process.exit(1);
 }
 
