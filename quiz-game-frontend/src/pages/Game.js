@@ -126,6 +126,45 @@ const Game = () => {
     setShowNameDialog(true);
   }, [playWrong]);
 
+  const loadQuestions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('Loading questions for:', { category, difficulty });
+      
+      const response = await axios.get(API_ENDPOINTS.RANDOM_QUESTIONS(category, difficulty, 10), {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.data && Array.isArray(response.data)) {
+        console.log('Questions loaded successfully:', response.data.length);
+        setQuestions(response.data);
+        setCurrentQuestion(0);
+      } else {
+        console.error('Invalid response format:', response.data);
+        setError('Invalid response from server');
+      }
+    } catch (err) {
+      console.error('Error loading questions:', err);
+      if (err.response) {
+        // Server responded with error
+        setError(`Server error: ${err.response.status} - ${err.response.data?.message || 'Unknown error'}`);
+      } else if (err.request) {
+        // Request made but no response
+        setError('No response from server. Please try again.');
+      } else {
+        // Other errors
+        setError('Failed to load questions. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const startGame = async () => {
     try {
       setLoading(true);

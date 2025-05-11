@@ -27,11 +27,15 @@ const connectWithRetry = async () => {
     const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz_game';
     
     try {
+        console.log('Attempting to connect to MongoDB...');
         await mongoose.connect(MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000,
+            serverSelectionTimeoutMS: 10000,
             socketTimeoutMS: 45000,
+            connectTimeoutMS: 10000,
+            retryWrites: true,
+            w: 'majority'
         });
         console.log('Connected to MongoDB successfully');
     } catch (err) {
@@ -54,12 +58,34 @@ mongoose.connection.on('disconnected', () => {
     connectWithRetry();
 });
 
+// Add health check endpoint
+app.get('/health', (req, res) => {
+    const dbState = mongoose.connection.readyState;
+    const health = {
+        status: dbState === 1 ? 'healthy' : 'unhealthy',
+        database: dbState === 1 ? 'connected' : 'disconnected',
+        timestamp: new Date().toISOString()
+    };
+    res.json(health);
+});
+
+// API routes
 const questionRoutes = require('./routes/questions');
 const playerRoutes = require('./routes/players');
 
-// API routes
 app.use('/api/questions', questionRoutes);
 app.use('/api/players', playerRoutes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(err.status || 500).json({
+        error: {
+            message: err.message || 'Internal Server Error',
+            status: err.status || 500
+        }
+    });
+});
 
 // Serve static files from the React app
 app.use(express.static(path.join(__dirname, 'quiz-game-frontend/build')));
@@ -72,4 +98,6 @@ app.get('*', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('MongoDB URI:', process.env.MONGODB_URI ? '***' : 'Not set');
 });
