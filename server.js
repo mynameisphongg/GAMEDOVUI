@@ -4,13 +4,24 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// Log startup information
+console.log('=== Application Startup ===');
+console.log('Node version:', process.version);
+console.log('Environment:', process.env.NODE_ENV);
+console.log('Port:', process.env.PORT);
+console.log('MongoDB URI:', process.env.MONGODB_URI ? '***' : 'Not set');
+
 // Enable better error logging
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    console.error('=== Unhandled Rejection ===');
+    console.error('Reason:', reason);
+    console.error('Promise:', promise);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
+    console.error('=== Uncaught Exception ===');
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
     // Don't exit on uncaught exception to allow for recovery
 });
 
@@ -19,12 +30,20 @@ const requiredEnvVars = ['MONGODB_URI'];
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
-    console.error('Missing required environment variables:', missingEnvVars);
+    console.error('=== Missing Environment Variables ===');
+    console.error('Missing variables:', missingEnvVars);
     console.error('Please set these variables in Railway dashboard');
     process.exit(1);
 }
 
 const app = express();
+
+// Add request logging middleware
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
 app.use(express.json());
 
 // CORS configuration
@@ -41,6 +60,7 @@ app.use(cors({
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
+            console.log('CORS blocked request from:', origin);
             callback(new Error('Not allowed by CORS'));
         }
     },
@@ -63,27 +83,41 @@ app.use((req, res, next) => {
 
 // Add a simple root endpoint
 app.get('/', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        message: 'Server is running',
-        mongodb: {
-            state: mongoose.connection.readyState,
-            host: mongoose.connection.host || 'not connected'
-        }
-    });
+    try {
+        const response = { 
+            status: 'ok', 
+            message: 'Server is running',
+            mongodb: {
+                state: mongoose.connection.readyState,
+                host: mongoose.connection.host || 'not connected'
+            }
+        };
+        console.log('Root endpoint response:', response);
+        res.json(response);
+    } catch (error) {
+        console.error('Error in root endpoint:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // Add health check endpoint
 app.get('/health', (req, res) => {
-    const dbState = mongoose.connection.readyState;
-    res.json({ 
-        status: dbState === 1 ? 'ok' : 'connecting',
-        timestamp: new Date().toISOString(),
-        mongodb: {
-            state: dbState,
-            host: mongoose.connection.host || 'not connected'
-        }
-    });
+    try {
+        const dbState = mongoose.connection.readyState;
+        const response = { 
+            status: dbState === 1 ? 'ok' : 'connecting',
+            timestamp: new Date().toISOString(),
+            mongodb: {
+                state: dbState,
+                host: mongoose.connection.host || 'not connected'
+            }
+        };
+        console.log('Health check response:', response);
+        res.json(response);
+    } catch (error) {
+        console.error('Error in health check:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // API routes
@@ -95,7 +129,9 @@ app.use('/api/players', playerRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
+    console.error('=== Error Middleware ===');
     console.error('Error:', err);
+    console.error('Stack:', err.stack);
     res.status(err.status || 500).json({
         error: {
             message: err.message || 'Internal Server Error',
@@ -109,7 +145,12 @@ app.use(express.static(path.join(__dirname, 'quiz-game-frontend/build')));
 
 // Handle React routing, return all requests to React app
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'quiz-game-frontend/build', 'index.html'));
+    try {
+        res.sendFile(path.join(__dirname, 'quiz-game-frontend/build', 'index.html'));
+    } catch (error) {
+        console.error('Error serving React app:', error);
+        res.status(500).send('Error serving application');
+    }
 });
 
 let server;
@@ -125,7 +166,9 @@ const connectWithRetry = async () => {
     }
 
     if (connectionAttempts >= MAX_RECONNECT_ATTEMPTS) {
-        console.error('Max reconnection attempts reached. Please check your MongoDB connection.');
+        console.error('=== Max Reconnection Attempts Reached ===');
+        console.error('Please check your MongoDB connection settings');
+        console.error('Connection attempts:', connectionAttempts);
         process.exit(1);
     }
 
@@ -134,7 +177,8 @@ const connectWithRetry = async () => {
     const MONGODB_URI = process.env.MONGODB_URI;
     
     try {
-        console.log(`Attempting to connect to MongoDB (attempt ${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+        console.log(`=== MongoDB Connection Attempt ${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS} ===`);
+        console.log('Attempting to connect to MongoDB...');
         
         await mongoose.connect(MONGODB_URI, {
             useNewUrlParser: true,
@@ -146,7 +190,7 @@ const connectWithRetry = async () => {
             w: 'majority'
         });
         
-        console.log('Connected to MongoDB successfully');
+        console.log('=== MongoDB Connected Successfully ===');
         console.log('Database:', mongoose.connection.name);
         console.log('Host:', mongoose.connection.host);
         
@@ -158,7 +202,9 @@ const connectWithRetry = async () => {
             startServer();
         }
     } catch (err) {
-        console.error('MongoDB connection error:', err);
+        console.error('=== MongoDB Connection Error ===');
+        console.error('Error:', err);
+        console.error('Stack:', err.stack);
         console.log(`Retrying connection in 5 seconds... (attempt ${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
         setTimeout(() => {
             isConnecting = false;
@@ -169,36 +215,50 @@ const connectWithRetry = async () => {
 
 // Handle MongoDB connection events
 mongoose.connection.on('error', (err) => {
-    console.error('MongoDB connection error:', err);
+    console.error('=== MongoDB Connection Error Event ===');
+    console.error('Error:', err);
+    console.error('Stack:', err.stack);
     isConnecting = false;
 });
 
 mongoose.connection.on('disconnected', () => {
-    console.log('MongoDB disconnected. Attempting to reconnect...');
+    console.log('=== MongoDB Disconnected ===');
+    console.log('Attempting to reconnect...');
     isConnecting = false;
     connectWithRetry();
 });
 
 function startServer() {
-    const PORT = process.env.PORT || 3000;
-    server = app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server is running on port ${PORT}`);
-        console.log('Environment:', process.env.NODE_ENV);
-    });
+    try {
+        const PORT = process.env.PORT || 3000;
+        server = app.listen(PORT, '0.0.0.0', () => {
+            console.log('=== Server Started Successfully ===');
+            console.log(`Server is running on port ${PORT}`);
+            console.log('Environment:', process.env.NODE_ENV);
+        });
 
-    // Handle server errors
-    server.on('error', (error) => {
-        console.error('Server error:', error);
-        if (error.code === 'EADDRINUSE') {
-            console.error(`Port ${PORT} is already in use`);
-            process.exit(1);
-        }
-    });
+        // Handle server errors
+        server.on('error', (error) => {
+            console.error('=== Server Error ===');
+            console.error('Error:', error);
+            console.error('Stack:', error.stack);
+            if (error.code === 'EADDRINUSE') {
+                console.error(`Port ${PORT} is already in use`);
+                process.exit(1);
+            }
+        });
+    } catch (error) {
+        console.error('=== Server Start Error ===');
+        console.error('Error:', error);
+        console.error('Stack:', error.stack);
+        process.exit(1);
+    }
 }
 
 // Handle process termination
 process.on('SIGTERM', () => {
-    console.log('SIGTERM received. Closing server...');
+    console.log('=== SIGTERM Received ===');
+    console.log('Closing server...');
     if (server) {
         server.close(() => {
             console.log('Server closed');
@@ -213,4 +273,5 @@ process.on('SIGTERM', () => {
 });
 
 // Start MongoDB connection
+console.log('=== Starting Application ===');
 connectWithRetry();
