@@ -11,7 +11,7 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
-    process.exit(1);
+    // Don't exit on uncaught exception to allow for recovery
 });
 
 // Validate required environment variables
@@ -114,6 +114,8 @@ app.get('*', (req, res) => {
 
 let server;
 let isConnecting = false;
+let connectionAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
 
 // MongoDB connection with retry logic
 const connectWithRetry = async () => {
@@ -122,11 +124,17 @@ const connectWithRetry = async () => {
         return;
     }
 
+    if (connectionAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        console.error('Max reconnection attempts reached. Please check your MongoDB connection.');
+        process.exit(1);
+    }
+
     isConnecting = true;
+    connectionAttempts++;
     const MONGODB_URI = process.env.MONGODB_URI;
     
     try {
-        console.log('Attempting to connect to MongoDB...');
+        console.log(`Attempting to connect to MongoDB (attempt ${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
         
         await mongoose.connect(MONGODB_URI, {
             useNewUrlParser: true,
@@ -142,13 +150,16 @@ const connectWithRetry = async () => {
         console.log('Database:', mongoose.connection.name);
         console.log('Host:', mongoose.connection.host);
         
+        // Reset connection attempts on successful connection
+        connectionAttempts = 0;
+        
         // Start the server only after MongoDB connects
         if (!server) {
             startServer();
         }
     } catch (err) {
         console.error('MongoDB connection error:', err);
-        console.log('Retrying connection in 5 seconds...');
+        console.log(`Retrying connection in 5 seconds... (attempt ${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
         setTimeout(() => {
             isConnecting = false;
             connectWithRetry();

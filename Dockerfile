@@ -52,7 +52,6 @@ COPY --from=backend-builder /app/node_modules ./node_modules
 COPY --from=backend-builder /app/server.js ./
 COPY --from=backend-builder /app/routes ./routes
 COPY --from=backend-builder /app/models ./models
-COPY --from=backend-builder /app/start.sh ./
 
 # Copy frontend build from frontend builder
 COPY --from=frontend-builder /app/frontend/build ./quiz-game-frontend/build
@@ -62,8 +61,17 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
-# Set proper permissions for start script
-RUN chmod +x /app/start.sh
+# Create a simple wrapper script to check environment and start the app
+RUN echo '#!/bin/sh\n\
+if [ -z "$MONGODB_URI" ]; then\n\
+    echo "Error: MONGODB_URI environment variable is not set"\n\
+    echo "Please set MONGODB_URI in Railway dashboard"\n\
+    exit 1\n\
+fi\n\
+\n\
+echo "Starting application..."\n\
+node server.js\n\
+' > /app/start && chmod +x /app/start
 
 # Use tini as init process
 ENTRYPOINT ["/sbin/tini", "--"]
@@ -72,4 +80,4 @@ ENTRYPOINT ["/sbin/tini", "--"]
 EXPOSE 3000
 
 # Start the application
-CMD ["/app/start.sh"] 
+CMD ["/app/start"] 
