@@ -44,7 +44,7 @@ FROM node:16.20.0-alpine
 WORKDIR /app
 
 # Install production dependencies
-RUN apk add --no-cache tini curl
+RUN apk add --no-cache tini
 
 # Copy backend files from builder
 COPY --from=backend-builder /app/package*.json ./
@@ -59,53 +59,18 @@ COPY --from=frontend-builder /app/frontend/build ./quiz-game-frontend/build
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV DEBUG=express:*
 
-# Create a script to check environment variables and start the app
+# Create a simple startup script
 RUN echo '#!/bin/sh\n\
-echo "=== Environment Check ==="\n\
-echo "Node version: $(node -v)"\n\
-echo "NPM version: $(npm -v)"\n\
-echo "Environment: $NODE_ENV"\n\
-echo "Port: $PORT"\n\
-\n\
 if [ -z "$MONGODB_URI" ]; then\n\
     echo "Error: MONGODB_URI environment variable is not set"\n\
     echo "Please set MONGODB_URI in Railway dashboard"\n\
     exit 1\n\
 fi\n\
 \n\
-echo "=== Starting Application ==="\n\
-# Start the application with more verbose logging\n\
-NODE_ENV=production DEBUG=express:* node server.js > /app/app.log 2>&1 &\n\
-APP_PID=$!\n\
-\n\
-# Wait for application to start\n\
-echo "=== Waiting for Application to Start ==="\n\
-for i in $(seq 1 30); do\n\
-    if curl -s http://localhost:3000/health > /dev/null; then\n\
-        echo "Application is healthy!"\n\
-        echo "=== Application Logs ==="\n\
-        cat /app/app.log\n\
-        wait $APP_PID\n\
-        exit 0\n\
-    fi\n\
-    echo "Attempt $i: Application not ready yet..."\n\
-    echo "=== Current Logs ==="\n\
-    cat /app/app.log\n\
-    sleep 2\n\
-done\n\
-\n\
-echo "=== Application Failed to Start ==="\n\
-echo "=== Final Logs ==="\n\
-cat /app/app.log\n\
-kill $APP_PID\n\
-exit 1\n\
+echo "Starting application..."\n\
+exec node server.js\n\
 ' > /app/start.sh && chmod +x /app/start.sh
-
-# Add healthcheck with curl and logging
-HEALTHCHECK --interval=15s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:3000/health || (echo "=== Health Check Failed ===" && cat /app/app.log && exit 1)
 
 # Use tini as init process
 ENTRYPOINT ["/sbin/tini", "--"]

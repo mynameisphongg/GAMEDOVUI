@@ -51,60 +51,21 @@ app.use((req, res, next) => {
     next();
 });
 
-// Add health check endpoint before MongoDB connection
+// Add a simple root endpoint
+app.get('/', (req, res) => {
+    res.json({ status: 'ok', message: 'Server is running' });
+});
+
+// Add health check endpoint
 app.get('/health', (req, res) => {
-    const health = {
-        status: 'healthy',
+    res.json({ 
+        status: 'ok',
         timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
         mongodb: {
             state: mongoose.connection.readyState,
-            host: mongoose.connection.host || 'not connected',
-            name: mongoose.connection.name || 'not connected'
+            host: mongoose.connection.host || 'not connected'
         }
-    };
-    res.json(health);
-});
-
-// MongoDB connection with retry logic
-const connectWithRetry = async () => {
-    const MONGODB_URI = process.env.MONGODB_URI;
-    
-    try {
-        console.log('Attempting to connect to MongoDB...');
-        console.log('Environment:', process.env.NODE_ENV || 'development');
-        
-        await mongoose.connect(MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 30000, // Tăng timeout lên 30 giây
-            socketTimeoutMS: 45000,
-            connectTimeoutMS: 30000,
-            retryWrites: true,
-            w: 'majority'
-        });
-        
-        console.log('Connected to MongoDB successfully');
-        console.log('Database:', mongoose.connection.name);
-        console.log('Host:', mongoose.connection.host);
-    } catch (err) {
-        console.error('MongoDB connection error:', err);
-        console.log('Retrying connection in 5 seconds...');
-        setTimeout(connectWithRetry, 5000);
-    }
-};
-
-// Initial connection attempt
-connectWithRetry();
-
-// Handle MongoDB connection events
-mongoose.connection.on('error', (err) => {
-    console.error('MongoDB connection error:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-    console.log('MongoDB disconnected. Attempting to reconnect...');
-    connectWithRetry();
+    });
 });
 
 // API routes
@@ -133,29 +94,80 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'quiz-game-frontend/build', 'index.html'));
 });
 
-const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server is running on port ${PORT}`);
-    console.log('Environment:', process.env.NODE_ENV);
+// MongoDB connection with retry logic
+const connectWithRetry = async () => {
+    const MONGODB_URI = process.env.MONGODB_URI;
+    
+    try {
+        console.log('Attempting to connect to MongoDB...');
+        
+        await mongoose.connect(MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 30000,
+            socketTimeoutMS: 45000,
+            connectTimeoutMS: 30000,
+            retryWrites: true,
+            w: 'majority'
+        });
+        
+        console.log('Connected to MongoDB successfully');
+        console.log('Database:', mongoose.connection.name);
+        console.log('Host:', mongoose.connection.host);
+        
+        // Start the server only after MongoDB connects
+        startServer();
+    } catch (err) {
+        console.error('MongoDB connection error:', err);
+        console.log('Retrying connection in 5 seconds...');
+        setTimeout(connectWithRetry, 5000);
+    }
+};
+
+// Handle MongoDB connection events
+mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
 });
 
-// Handle server errors
-server.on('error', (error) => {
-    console.error('Server error:', error);
-    if (error.code === 'EADDRINUSE') {
-        console.error(`Port ${PORT} is already in use`);
-        process.exit(1);
-    }
+mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB disconnected. Attempting to reconnect...');
+    connectWithRetry();
 });
+
+let server;
+
+function startServer() {
+    const PORT = process.env.PORT || 3000;
+    server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server is running on port ${PORT}`);
+        console.log('Environment:', process.env.NODE_ENV);
+    });
+
+    // Handle server errors
+    server.on('error', (error) => {
+        console.error('Server error:', error);
+        if (error.code === 'EADDRINUSE') {
+            console.error(`Port ${PORT} is already in use`);
+            process.exit(1);
+        }
+    });
+}
 
 // Handle process termination
 process.on('SIGTERM', () => {
     console.log('SIGTERM received. Closing server...');
-    server.close(() => {
-        console.log('Server closed');
-        mongoose.connection.close(false, () => {
-            console.log('MongoDB connection closed');
-            process.exit(0);
+    if (server) {
+        server.close(() => {
+            console.log('Server closed');
+            mongoose.connection.close(false, () => {
+                console.log('MongoDB connection closed');
+                process.exit(0);
+            });
         });
-    });
+    } else {
+        process.exit(0);
+    }
 });
+
+// Start MongoDB connection
+connectWithRetry();
