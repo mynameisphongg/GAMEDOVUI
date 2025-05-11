@@ -3,6 +3,19 @@
 # Exit on any error
 set -e
 
+# Function to handle cleanup
+cleanup() {
+    echo "=== Cleanup Started ==="
+    if [ -n "$NODE_PID" ]; then
+        echo "Sending SIGTERM to Node process $NODE_PID"
+        kill -TERM "$NODE_PID" 2>/dev/null || true
+    fi
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup SIGTERM SIGINT
+
 echo "=== Application Startup ==="
 echo "Current directory: $(pwd)"
 echo "Directory contents:"
@@ -58,7 +71,10 @@ while [ $attempt -le $max_attempts ]; do
         mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000
+            serverSelectionTimeoutMS: 5000,
+            heartbeatFrequencyMS: 2000,
+            keepAlive: true,
+            keepAliveInitialDelay: 300000
         })
         .then(() => {
             clearTimeout(timeout);
@@ -88,7 +104,10 @@ if [ $attempt -gt $max_attempts ]; then
         mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000
+            serverSelectionTimeoutMS: 5000,
+            heartbeatFrequencyMS: 2000,
+            keepAlive: true,
+            keepAliveInitialDelay: 300000
         })
         .catch(err => {
             console.error(err);
@@ -100,4 +119,8 @@ fi
 
 # Start the application with proper error handling
 echo "=== Starting Server ==="
-exec node --trace-warnings server.js 
+node --trace-warnings server.js &
+NODE_PID=$!
+
+# Wait for the Node process
+wait $NODE_PID 

@@ -4,6 +4,13 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 
+// Keep track of application state
+let isShuttingDown = false;
+let server = null;
+let isConnecting = false;
+let connectionAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+
 // Log startup information
 console.log('=== Application Startup ===');
 console.log('Node version:', process.version);
@@ -11,19 +18,23 @@ console.log('Environment:', process.env.NODE_ENV);
 console.log('Port:', process.env.PORT);
 console.log('Memory usage:', process.memoryUsage());
 
-// Enable better error logging
+// Handle process signals
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+
+// Handle uncaught errors
 process.on('unhandledRejection', (reason, promise) => {
     console.error('=== Unhandled Rejection ===');
     console.error('Reason:', reason);
     console.error('Promise:', promise);
-    // Don't exit on unhandled rejection
+    // Don't exit, just log the error
 });
 
 process.on('uncaughtException', (error) => {
     console.error('=== Uncaught Exception ===');
     console.error('Error:', error);
     console.error('Stack:', error.stack);
-    // Don't exit on uncaught exception
+    // Don't exit, just log the error
 });
 
 // Validate required environment variables
@@ -37,6 +48,9 @@ const app = express();
 
 // Add request logging middleware
 app.use((req, res, next) => {
+    if (isShuttingDown) {
+        return res.status(503).json({ error: 'Server is shutting down' });
+    }
     console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
     next();
 });
@@ -90,7 +104,8 @@ app.get('/', (req, res) => {
                 state: mongoose.connection.readyState,
                 host: mongoose.connection.host || 'not connected'
             },
-            memory: process.memoryUsage()
+            memory: process.memoryUsage(),
+            uptime: process.uptime()
         };
         console.log('Root endpoint response:', response);
         res.json(response);
@@ -111,7 +126,8 @@ app.get('/health', (req, res) => {
                 state: dbState,
                 host: mongoose.connection.host || 'not connected'
             },
-            memory: process.memoryUsage()
+            memory: process.memoryUsage(),
+            uptime: process.uptime()
         };
         console.log('Health check response:', response);
         res.json(response);
@@ -154,11 +170,6 @@ app.get('*', (req, res) => {
     }
 });
 
-let server;
-let isConnecting = false;
-let connectionAttempts = 0;
-const MAX_RECONNECT_ATTEMPTS = 10;
-
 // MongoDB connection with retry logic
 const connectWithRetry = async () => {
     if (isConnecting) {
@@ -193,7 +204,10 @@ const connectWithRetry = async () => {
             retryWrites: true,
             w: 'majority',
             maxPoolSize: 10,
-            minPoolSize: 5
+            minPoolSize: 5,
+            heartbeatFrequencyMS: 2000,
+            keepAlive: true,
+            keepAliveInitialDelay: 300000
         });
         
         console.log('=== MongoDB Connected Successfully ===');
@@ -233,7 +247,9 @@ mongoose.connection.on('disconnected', () => {
     console.log('=== MongoDB Disconnected ===');
     console.log('Attempting to reconnect...');
     isConnecting = false;
-    connectWithRetry();
+    if (!isShuttingDown) {
+        connectWithRetry();
+    }
 });
 
 function startServer() {
@@ -269,22 +285,37 @@ function startServer() {
     }
 }
 
-// Handle process termination
-process.on('SIGTERM', () => {
-    console.log('=== SIGTERM Received ===');
-    console.log('Closing server...');
-    if (server) {
-        server.close(() => {
-            console.log('Server closed');
-            mongoose.connection.close(false, () => {
-                console.log('MongoDB connection closed');
-                process.exit(0);
+// Graceful shutdown function
+async function gracefulShutdown() {
+    console.log('=== Graceful Shutdown Started ===');
+    isShuttingDown = true;
+
+    try {
+        // Close server first
+        if (server) {
+            await new Promise((resolve) => {
+                server.close(() => {
+                    console.log('Server closed');
+                    resolve();
+                });
             });
-        });
-    } else {
+        }
+
+        // Then close MongoDB connection
+        if (mongoose.connection.readyState === 1) {
+            await mongoose.connection.close(false);
+            console.log('MongoDB connection closed');
+        }
+
+        console.log('=== Graceful Shutdown Completed ===');
         process.exit(0);
+    } catch (error) {
+        console.error('=== Graceful Shutdown Error ===');
+        console.error('Error:', error);
+        console.error('Stack:', error.stack);
+        process.exit(1);
     }
-});
+}
 
 // Start MongoDB connection
 console.log('=== Starting Application ===');
