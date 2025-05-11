@@ -21,12 +21,9 @@
     "use-sound": "4.0.1",
     "web-vitals": "2.1.4"
   },
-  "devDependencies": {
-    "css-minimizer-webpack-plugin": "4.2.2"
-  },
   "scripts": {
-    "start": "set PORT=3000 && react-scripts start",
-    "build": "set \"GENERATE_SOURCEMAP=false\" && set \"CI=false\" && react-scripts build",
+    "start": "react-scripts start",
+    "build": "GENERATE_SOURCEMAP=false CI=false react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -51,11 +48,11 @@
     ]
   },
   "engines": {
-    "node": "16.x",
-    "npm": "8.x"
+    "node": "16.20.0",
+    "npm": "8.19.4"
   },
   "resolutions": {
-    "react-scripts/**/postcss": "^8.4.21",
-    "react-scripts/**/browserslist": "^4.21.4"
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   }
 }

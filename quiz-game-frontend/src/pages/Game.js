@@ -85,29 +85,26 @@ const Game = () => {
   const [availableOptions, setAvailableOptions] = useState([]);
   const [audienceData, setAudienceData] = useState(null);
 
-  // Sound effects with lazy initialization
+  // Move useSound hooks to component level
+  const [playCorrect] = useSound(correctSound);
+  const [playWrong] = useSound(wrongSound);
+  const [playBackground, { stop: stopBackground }] = useSound(bgMusic, { loop: true, volume: 0.5 });
+
+  // Initialize sounds state
   const [sounds, setSounds] = useState({
-    bgMusic: null,
     correct: null,
-    wrong: null
+    wrong: null,
+    background: null
   });
 
+  // Initialize sounds after user interaction
   const initializeSounds = useCallback(() => {
-    if (!sounds.bgMusic) {
-      const [playBgMusic, { stop: stopBgMusic }] = useSound(bgMusic, { 
-        volume: 0.3,
-        loop: true 
-      });
-      const [playCorrect] = useSound(correctSound, { volume: 0.5 });
-      const [playWrong] = useSound(wrongSound, { volume: 0.5 });
-
-      setSounds({
-        bgMusic: { play: playBgMusic, stop: stopBgMusic },
-        correct: { play: playCorrect },
-        wrong: { play: playWrong }
-      });
-    }
-  }, [sounds.bgMusic]);
+    setSounds({
+      correct: playCorrect,
+      wrong: playWrong,
+      background: playBackground
+    });
+  }, [playCorrect, playWrong, playBackground]);
 
   // Timer effect
   useEffect(() => {
@@ -128,21 +125,19 @@ const Game = () => {
 
   // Start background music when game starts
   useEffect(() => {
-    if (gameStarted && !gameOver && sounds.bgMusic) {
-      sounds.bgMusic.play();
-    } else if (sounds.bgMusic) {
-      sounds.bgMusic.stop();
+    if (gameStarted && sounds.background) {
+      sounds.background();
     }
     return () => {
-      if (sounds.bgMusic) {
-        sounds.bgMusic.stop();
+      if (sounds.background) {
+        stopBackground();
       }
     };
-  }, [gameStarted, gameOver, sounds.bgMusic]);
+  }, [gameStarted, sounds.background, stopBackground]);
 
   const handleTimeUp = useCallback(() => {
     if (sounds.wrong) {
-      sounds.wrong.play();
+      sounds.wrong();
     }
     setGameOver(true);
     setShowNameDialog(true);
@@ -201,9 +196,6 @@ const Game = () => {
 
   const startGame = async () => {
     try {
-      // Initialize sounds when user starts the game
-      initializeSounds();
-      
       setLoading(true);
       setError(null);
       
@@ -219,6 +211,7 @@ const Game = () => {
         });
         setAvailableOptions([]);
         setAudienceData(null);
+        initializeSounds();
       } else {
         setGameStarted(false);
       }
@@ -238,7 +231,7 @@ const Game = () => {
     const isCorrect = answer === questions[currentQuestion].answer;
 
     if (isCorrect && sounds.correct) {
-      sounds.correct.play();
+      sounds.correct();
       const timeBonus = timeLeft / questions[currentQuestion].timeLimit;
       const difficultyMultiplier = {
         easy: 1,
@@ -249,7 +242,7 @@ const Game = () => {
       const points = Math.round(questions[currentQuestion].points * difficultyMultiplier * (1 + timeBonus));
       setScore(prev => prev + points);
     } else if (!isCorrect && sounds.wrong) {
-      sounds.wrong.play();
+      sounds.wrong();
     }
 
     // Reset các state liên quan đến gợi ý khi chuyển câu hỏi
@@ -263,6 +256,9 @@ const Game = () => {
         setSelectedAnswer(null);
         setTimeLeft(questions[currentQuestion + 1].timeLimit);
       } else {
+        if (sounds.background) {
+          stopBackground();
+        }
         setGameOver(true);
         setShowNameDialog(true);
       }
