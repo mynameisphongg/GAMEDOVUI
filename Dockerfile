@@ -61,23 +61,11 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
-# Create a simple wrapper script to check environment and start the app
-RUN echo '#!/bin/sh\n\
-if [ -z "$MONGODB_URI" ]; then\n\
-    echo "Error: MONGODB_URI environment variable is not set"\n\
-    echo "Please set MONGODB_URI in Railway dashboard"\n\
-    exit 1\n\
-fi\n\
-\n\
-echo "Starting application..."\n\
-node server.js\n\
-' > /app/start && chmod +x /app/start
-
 # Use tini as init process
 ENTRYPOINT ["/sbin/tini", "--"]
 
 # Expose port
 EXPOSE 3000
 
-# Start the application
-CMD ["/app/start"] 
+# Start the application directly
+CMD ["node", "server.js"] 
