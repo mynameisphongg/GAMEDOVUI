@@ -12,7 +12,7 @@
       "client": "cd quiz-game-frontend && npm start",
       "dev": "concurrently \"npm run server\" \"npm run client\"",
       "build": "cd quiz-game-frontend && npm install && npm run build",
-      "postinstall": "cd quiz-game-frontend && npm install"
+      "postinstall": "cd quiz-game-frontend && npm install && npm run build"
     },
     "dependencies": {
       "cors": "^2.8.5",
