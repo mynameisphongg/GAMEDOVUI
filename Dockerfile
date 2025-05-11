@@ -27,11 +27,15 @@ WORKDIR /app
 # Install production dependencies
 RUN apk add --no-cache tini curl
 
+# Create app user and group
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Copy backend package files
 COPY package*.json ./
 
 # Install backend dependencies
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps && \
+    npm cache clean --force
 
 # Copy backend source
 COPY . .
@@ -44,12 +48,10 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
-# Create a non-root user
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
-    chown -R appuser:appgroup /app
-
-# Make sure start.sh is executable
-RUN chmod +x start.sh
+# Set proper permissions
+RUN chown -R appuser:appgroup /app && \
+    chmod -R 755 /app && \
+    chmod +x start.sh
 
 # Use tini as init process
 ENTRYPOINT ["/sbin/tini", "--"]

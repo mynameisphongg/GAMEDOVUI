@@ -1,32 +1,103 @@
 #!/bin/sh
 
-echo "Starting application..."
+# Exit on any error
+set -e
+
+echo "=== Application Startup ==="
+echo "Current directory: $(pwd)"
+echo "Directory contents:"
+ls -la
+
+echo "=== Environment Check ==="
 echo "Node version: $(node -v)"
 echo "NPM version: $(npm -v)"
 echo "Environment: $NODE_ENV"
 echo "Port: $PORT"
 echo "MongoDB URI: ${MONGODB_URI:+***}"
 
+# Check if required files exist
+echo "=== Checking Required Files ==="
+if [ ! -f "server.js" ]; then
+    echo "Error: server.js not found"
+    exit 1
+fi
+
+if [ ! -d "quiz-game-frontend/build" ]; then
+    echo "Error: Frontend build directory not found"
+    exit 1
+fi
+
+if [ ! -d "node_modules" ]; then
+    echo "Error: node_modules directory not found"
+    exit 1
+fi
+
+# Check MongoDB URI
+if [ -z "$MONGODB_URI" ]; then
+    echo "Error: MONGODB_URI environment variable is not set"
+    echo "Please set MONGODB_URI in Railway dashboard"
+    exit 1
+fi
+
 # Wait for MongoDB to be ready
-echo "Waiting for MongoDB..."
+echo "=== Waiting for MongoDB ==="
 max_attempts=30
 attempt=1
 
 while [ $attempt -le $max_attempts ]; do
-  if node -e "const mongoose=require('mongoose'); mongoose.connect(process.env.MONGODB_URI,{useNewUrlParser:true,useUnifiedTopology:true,serverSelectionTimeoutMS:5000}).then(()=>process.exit(0)).catch(()=>process.exit(1))"; then
-    echo "MongoDB is ready!"
-    break
-  fi
-  echo "Attempt $attempt/$max_attempts: MongoDB not ready, waiting..."
-  attempt=$((attempt + 1))
-  sleep 2
+    echo "Attempt $attempt/$max_attempts: Testing MongoDB connection..."
+    
+    # Test MongoDB connection with timeout
+    if node -e "
+        const mongoose = require('mongoose');
+        const timeout = setTimeout(() => {
+            console.error('MongoDB connection timeout');
+            process.exit(1);
+        }, 5000);
+        
+        mongoose.connect(process.env.MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000
+        })
+        .then(() => {
+            clearTimeout(timeout);
+            console.log('MongoDB connection successful');
+            process.exit(0);
+        })
+        .catch(err => {
+            clearTimeout(timeout);
+            console.error('MongoDB connection error:', err.message);
+            process.exit(1);
+        });
+    "; then
+        echo "MongoDB is ready!"
+        break
+    fi
+    
+    echo "MongoDB not ready, waiting..."
+    attempt=$((attempt + 1))
+    sleep 2
 done
 
 if [ $attempt -gt $max_attempts ]; then
-  echo "MongoDB connection failed after $max_attempts attempts"
-  exit 1
+    echo "MongoDB connection failed after $max_attempts attempts"
+    echo "Last error:"
+    node -e "
+        const mongoose = require('mongoose');
+        mongoose.connect(process.env.MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000
+        })
+        .catch(err => {
+            console.error(err);
+            process.exit(1);
+        });
+    "
+    exit 1
 fi
 
-# Start the application
-echo "Starting server..."
-exec node server.js 
+# Start the application with proper error handling
+echo "=== Starting Server ==="
+exec node --trace-warnings server.js 
