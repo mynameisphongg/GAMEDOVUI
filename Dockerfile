@@ -1,16 +1,34 @@
 # Build stage for frontend
 FROM node:18-alpine as frontend-builder
 WORKDIR /app/frontend
+
+# Copy package files first to leverage Docker cache
 COPY quiz-game-frontend/package*.json ./
-RUN npm install --legacy-peer-deps
+
+# Install dependencies with specific flags
+RUN npm install --legacy-peer-deps --no-audit --no-fund
+
+# Copy the rest of the frontend code
 COPY quiz-game-frontend/ ./
-RUN npm run build
+
+# Set environment variables for build
+ENV NODE_ENV=production
+ENV GENERATE_SOURCEMAP=false
+
+# Build the frontend
+RUN npm run build || (echo "Build failed. Check the logs above for errors." && exit 1)
 
 # Build stage for backend
 FROM node:18-alpine as backend-builder
 WORKDIR /app
+
+# Copy package files first
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+
+# Install dependencies
+RUN npm install --legacy-peer-deps --no-audit --no-fund
+
+# Copy the rest of the backend code
 COPY . .
 
 # Production stage
