@@ -46,6 +46,7 @@ import {
   ArcElement,
 } from 'chart.js';
 import axios from 'axios';
+import API_ENDPOINTS from '../config';
 
 // Register ChartJS components
 ChartJS.register(
@@ -84,9 +85,8 @@ const Profile = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`http://localhost:5001/players/stats/${encodeURIComponent(name)}`);
+      const response = await axios.get(API_ENDPOINTS.PLAYER_STATS(name));
       
-      // Kiểm tra response data
       if (!response.data) {
         throw new Error('Không nhận được dữ liệu từ server');
       }
@@ -104,7 +104,6 @@ const Profile = () => {
           recentGames: []
         }));
       } else {
-        // Đảm bảo tất cả các trường số đều có giá trị mặc định là 0
         const safeData = {
           name: response.data.name || name || '',
           totalScore: Number(response.data.totalScore) || 0,
@@ -128,17 +127,7 @@ const Profile = () => {
       }
     } catch (err) {
       console.error('Error fetching player stats:', err);
-      if (err.response?.status === 404) {
-        setError('Không tìm thấy hồ sơ người chơi này');
-      } else if (retryCount < 3) {
-        // Thử lại tối đa 3 lần nếu server không phản hồi
-        setTimeout(() => {
-          setRetryCount(prev => prev + 1);
-          fetchPlayerStats();
-        }, 1000 * (retryCount + 1)); // Tăng thời gian chờ mỗi lần retry
-      } else {
-        setError('Không thể kết nối đến server. Vui lòng kiểm tra lại kết nối và thử lại.');
-      }
+      setError('Failed to load player statistics');
     } finally {
       setLoading(false);
     }

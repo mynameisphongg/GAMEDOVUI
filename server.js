@@ -8,15 +8,36 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// MongoDB connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz_game';
-mongoose.connect(MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
-}).then(() => {
-    console.log('Connected to MongoDB');
-}).catch(err => {
+// MongoDB connection with retry logic
+const connectWithRetry = async () => {
+    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/quiz_game';
+    
+    try {
+        await mongoose.connect(MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
+        });
+        console.log('Connected to MongoDB successfully');
+    } catch (err) {
+        console.error('MongoDB connection error:', err);
+        console.log('Retrying connection in 5 seconds...');
+        setTimeout(connectWithRetry, 5000);
+    }
+};
+
+// Initial connection attempt
+connectWithRetry();
+
+// Handle MongoDB connection events
+mongoose.connection.on('error', (err) => {
     console.error('MongoDB connection error:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB disconnected. Attempting to reconnect...');
+    connectWithRetry();
 });
 
 const questionRoutes = require('./routes/questions');

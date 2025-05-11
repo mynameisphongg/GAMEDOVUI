@@ -36,6 +36,7 @@ import {
   ArcElement,
 } from 'chart.js';
 import axios from 'axios';
+import API_ENDPOINTS from '../config';
 
 // Register ChartJS components
 ChartJS.register(
@@ -81,11 +82,10 @@ const Leaderboard = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(
-        `http://localhost:5001/players/leaderboard?category=${category}&timeFrame=${timeFrame}`
-      );
+      const response = await axios.get(`${API_ENDPOINTS.LEADERBOARD}?category=${category}&timeFrame=${timeFrame}`);
       setLeaderboard(response.data);
     } catch (err) {
+      console.error('Error fetching leaderboard:', err);
       setError('Failed to load leaderboard data');
     } finally {
       setLoading(false);

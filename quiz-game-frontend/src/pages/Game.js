@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import useSound from 'use-sound';
 import axios from 'axios';
+import API_ENDPOINTS from '../config';
 
 // Import sound effects
 import bgMusic from '../assets/sounds/bg-music.mp3';
@@ -129,7 +130,7 @@ const Game = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(`http://localhost:5001/questions/random?category=${category}&difficulty=${difficulty}&limit=10`);
+      const response = await axios.get(API_ENDPOINTS.RANDOM_QUESTIONS(category, difficulty, 10));
       setQuestions(response.data);
       setGameStarted(true);
       setCurrentQuestion(0);
@@ -143,6 +144,7 @@ const Game = () => {
       setAvailableOptions([]);
       setAudienceData(null);
     } catch (err) {
+      console.error('Error loading questions:', err);
       setError('Failed to load questions. Please try again.');
     } finally {
       setLoading(false);
@@ -193,7 +195,6 @@ const Game = () => {
       return;
     }
 
-    // Kiểm tra tên người chơi có ký tự đặc biệt hoặc khoảng trắng không hợp lệ
     const nameRegex = /^[a-zA-Z0-9\s]+$/;
     if (!nameRegex.test(playerName.trim())) {
       setError('Tên người chơi chỉ được chứa chữ cái, số và khoảng trắng');
@@ -204,15 +205,13 @@ const Game = () => {
       setSubmitting(true);
       setError('');
 
-      // Kiểm tra xem người chơi đã có điểm trong chủ đề này chưa
-      const checkResponse = await axios.get(`http://localhost:5001/players/check/${encodeURIComponent(playerName.trim())}/${category}`);
+      const checkResponse = await axios.get(API_ENDPOINTS.CHECK_PLAYER(playerName.trim(), category));
       
       if (checkResponse.data.exists) {
         setError('Tên này đã được sử dụng trong chủ đề này. Vui lòng chọn tên khác hoặc chọn chủ đề khác.');
         return;
       }
 
-      // Chuẩn bị dữ liệu để lưu
       const gameData = {
         name: playerName.trim(),
         category: category,
@@ -225,23 +224,15 @@ const Game = () => {
         }))
       };
 
-      // Gửi dữ liệu lên server
-      const response = await axios.post('http://localhost:5001/players/submit', gameData);
+      const response = await axios.post(API_ENDPOINTS.SUBMIT_SCORE, gameData);
 
       if (response.data) {
-        // Đóng dialog và chuyển hướng đến trang profile
         setSubmitDialogOpen(false);
         navigate(`/profile/${encodeURIComponent(playerName.trim())}`);
       }
     } catch (err) {
       console.error('Error submitting score:', err);
-      if (err.response?.status === 409) {
-        setError('Tên này đã được sử dụng trong chủ đề này. Vui lòng chọn tên khác hoặc chọn chủ đề khác.');
-      } else if (err.response?.status === 400) {
-        setError('Dữ liệu không hợp lệ. Vui lòng thử lại.');
-      } else {
-        setError('Không thể lưu điểm. Vui lòng thử lại sau.');
-      }
+      setError('Failed to submit score. Please try again.');
     } finally {
       setSubmitting(false);
     }
