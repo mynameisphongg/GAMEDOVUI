@@ -75,29 +75,10 @@ if [ -z "$MONGODB_URI" ]; then\n\
     exit 1\n\
 fi\n\
 \n\
-echo "MongoDB URI: ${MONGODB_URI:0:20}..."\n\
-\n\
 echo "=== Starting Application ==="\n\
 # Start the application with more verbose logging\n\
 NODE_ENV=production DEBUG=express:* node server.js > /app/app.log 2>&1 &\n\
 APP_PID=$!\n\
-\n\
-# Wait for MongoDB connection\n\
-echo "=== Waiting for MongoDB Connection ==="\n\
-for i in $(seq 1 30); do\n\
-    if grep -q "Connected to MongoDB successfully" /app/app.log; then\n\
-        echo "MongoDB connected successfully!"\n\
-        break\n\
-    fi\n\
-    if [ $i -eq 30 ]; then\n\
-        echo "MongoDB connection timeout"\n\
-        cat /app/app.log\n\
-        kill $APP_PID\n\
-        exit 1\n\
-    fi\n\
-    echo "Waiting for MongoDB connection... (attempt $i/30)"\n\
-    sleep 2\n\
-done\n\
 \n\
 # Wait for application to start\n\
 echo "=== Waiting for Application to Start ==="\n\
@@ -123,7 +104,7 @@ exit 1\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Add healthcheck with curl and logging
-HEALTHCHECK --interval=15s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:3000/health || (echo "=== Health Check Failed ===" && cat /app/app.log && exit 1)
 
 # Use tini as init process

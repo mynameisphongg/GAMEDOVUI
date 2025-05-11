@@ -51,21 +51,35 @@ app.use((req, res, next) => {
     next();
 });
 
+// Add health check endpoint before MongoDB connection
+app.get('/health', (req, res) => {
+    const health = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        mongodb: {
+            state: mongoose.connection.readyState,
+            host: mongoose.connection.host || 'not connected',
+            name: mongoose.connection.name || 'not connected'
+        }
+    };
+    res.json(health);
+});
+
 // MongoDB connection with retry logic
 const connectWithRetry = async () => {
     const MONGODB_URI = process.env.MONGODB_URI;
     
     try {
         console.log('Attempting to connect to MongoDB...');
-        console.log('MongoDB URI:', MONGODB_URI ? '***' : 'Not set');
         console.log('Environment:', process.env.NODE_ENV || 'development');
         
         await mongoose.connect(MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 10000,
+            serverSelectionTimeoutMS: 30000, // Tăng timeout lên 30 giây
             socketTimeoutMS: 45000,
-            connectTimeoutMS: 10000,
+            connectTimeoutMS: 30000,
             retryWrites: true,
             w: 'majority'
         });
@@ -91,23 +105,6 @@ mongoose.connection.on('error', (err) => {
 mongoose.connection.on('disconnected', () => {
     console.log('MongoDB disconnected. Attempting to reconnect...');
     connectWithRetry();
-});
-
-// Add health check endpoint
-app.get('/health', (req, res) => {
-    const dbState = mongoose.connection.readyState;
-    const health = {
-        status: dbState === 1 ? 'healthy' : 'unhealthy',
-        database: dbState === 1 ? 'connected' : 'disconnected',
-        environment: process.env.NODE_ENV || 'development',
-        timestamp: new Date().toISOString(),
-        mongodb: {
-            state: dbState,
-            host: mongoose.connection.host,
-            name: mongoose.connection.name
-        }
-    };
-    res.json(health);
 });
 
 // API routes
@@ -137,8 +134,28 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on port ${PORT}`);
     console.log('Environment:', process.env.NODE_ENV);
-    console.log('MongoDB URI:', process.env.MONGODB_URI ? '***' : 'Not set');
+});
+
+// Handle server errors
+server.on('error', (error) => {
+    console.error('Server error:', error);
+    if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use`);
+        process.exit(1);
+    }
+});
+
+// Handle process termination
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received. Closing server...');
+    server.close(() => {
+        console.log('Server closed');
+        mongoose.connection.close(false, () => {
+            console.log('MongoDB connection closed');
+            process.exit(0);
+        });
+    });
 });
