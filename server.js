@@ -9,6 +9,7 @@ console.log('=== Application Startup ===');
 console.log('Node version:', process.version);
 console.log('Environment:', process.env.NODE_ENV);
 console.log('Port:', process.env.PORT);
+console.log('Memory usage:', process.memoryUsage());
 
 // Enable better error logging
 process.on('unhandledRejection', (reason, promise) => {
@@ -40,7 +41,9 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(express.json());
+// Increase JSON payload limit
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // CORS configuration
 const allowedOrigins = [
@@ -86,7 +89,8 @@ app.get('/', (req, res) => {
             mongodb: {
                 state: mongoose.connection.readyState,
                 host: mongoose.connection.host || 'not connected'
-            }
+            },
+            memory: process.memoryUsage()
         };
         console.log('Root endpoint response:', response);
         res.json(response);
@@ -106,7 +110,8 @@ app.get('/health', (req, res) => {
             mongodb: {
                 state: dbState,
                 host: mongoose.connection.host || 'not connected'
-            }
+            },
+            memory: process.memoryUsage()
         };
         console.log('Health check response:', response);
         res.json(response);
@@ -165,7 +170,11 @@ const connectWithRetry = async () => {
         console.error('=== Max Reconnection Attempts Reached ===');
         console.error('Please check your MongoDB connection settings');
         console.error('Connection attempts:', connectionAttempts);
-        // Don't exit, just log the error
+        // Don't exit, just log the error and keep trying
+        setTimeout(() => {
+            connectionAttempts = 0;
+            connectWithRetry();
+        }, 30000); // Try again after 30 seconds
         return;
     }
 
@@ -182,7 +191,9 @@ const connectWithRetry = async () => {
             socketTimeoutMS: 45000,
             connectTimeoutMS: 5000,
             retryWrites: true,
-            w: 'majority'
+            w: 'majority',
+            maxPoolSize: 10,
+            minPoolSize: 5
         });
         
         console.log('=== MongoDB Connected Successfully ===');
@@ -232,6 +243,7 @@ function startServer() {
             console.log('=== Server Started Successfully ===');
             console.log(`Server is running on port ${PORT}`);
             console.log('Environment:', process.env.NODE_ENV);
+            console.log('Memory usage:', process.memoryUsage());
         });
 
         // Handle server errors
@@ -243,6 +255,11 @@ function startServer() {
                 console.error(`Port ${PORT} is already in use`);
                 // Don't exit, just log the error
             }
+        });
+
+        // Handle server close
+        server.on('close', () => {
+            console.log('=== Server Closed ===');
         });
     } catch (error) {
         console.error('=== Server Start Error ===');

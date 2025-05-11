@@ -42,12 +42,24 @@ COPY --from=frontend-builder /app/frontend/build ./quiz-game-frontend/build
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
+# Create a non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
+    chown -R appuser:appgroup /app
 
 # Make sure start.sh is executable
 RUN chmod +x start.sh
 
 # Use tini as init process
 ENTRYPOINT ["/sbin/tini", "--"]
+
+# Switch to non-root user
+USER appuser
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Expose port
 EXPOSE 3000
