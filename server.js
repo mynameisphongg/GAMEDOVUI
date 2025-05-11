@@ -9,30 +9,26 @@ console.log('=== Application Startup ===');
 console.log('Node version:', process.version);
 console.log('Environment:', process.env.NODE_ENV);
 console.log('Port:', process.env.PORT);
-console.log('MongoDB URI:', process.env.MONGODB_URI ? '***' : 'Not set');
 
 // Enable better error logging
 process.on('unhandledRejection', (reason, promise) => {
     console.error('=== Unhandled Rejection ===');
     console.error('Reason:', reason);
     console.error('Promise:', promise);
+    // Don't exit on unhandled rejection
 });
 
 process.on('uncaughtException', (error) => {
     console.error('=== Uncaught Exception ===');
     console.error('Error:', error);
     console.error('Stack:', error.stack);
-    // Don't exit on uncaught exception to allow for recovery
+    // Don't exit on uncaught exception
 });
 
 // Validate required environment variables
-const requiredEnvVars = ['MONGODB_URI'];
-const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
-
-if (missingEnvVars.length > 0) {
+if (!process.env.MONGODB_URI) {
     console.error('=== Missing Environment Variables ===');
-    console.error('Missing variables:', missingEnvVars);
-    console.error('Please set these variables in Railway dashboard');
+    console.error('MONGODB_URI is required');
     process.exit(1);
 }
 
@@ -169,23 +165,22 @@ const connectWithRetry = async () => {
         console.error('=== Max Reconnection Attempts Reached ===');
         console.error('Please check your MongoDB connection settings');
         console.error('Connection attempts:', connectionAttempts);
-        process.exit(1);
+        // Don't exit, just log the error
+        return;
     }
 
     isConnecting = true;
     connectionAttempts++;
-    const MONGODB_URI = process.env.MONGODB_URI;
     
     try {
         console.log(`=== MongoDB Connection Attempt ${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS} ===`);
-        console.log('Attempting to connect to MongoDB...');
         
-        await mongoose.connect(MONGODB_URI, {
+        await mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 30000,
+            serverSelectionTimeoutMS: 5000,
             socketTimeoutMS: 45000,
-            connectTimeoutMS: 30000,
+            connectTimeoutMS: 5000,
             retryWrites: true,
             w: 'majority'
         });
@@ -206,6 +201,8 @@ const connectWithRetry = async () => {
         console.error('Error:', err);
         console.error('Stack:', err.stack);
         console.log(`Retrying connection in 5 seconds... (attempt ${connectionAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+        
+        // Don't exit on connection error, just retry
         setTimeout(() => {
             isConnecting = false;
             connectWithRetry();
@@ -244,14 +241,14 @@ function startServer() {
             console.error('Stack:', error.stack);
             if (error.code === 'EADDRINUSE') {
                 console.error(`Port ${PORT} is already in use`);
-                process.exit(1);
+                // Don't exit, just log the error
             }
         });
     } catch (error) {
         console.error('=== Server Start Error ===');
         console.error('Error:', error);
         console.error('Stack:', error.stack);
-        process.exit(1);
+        // Don't exit, just log the error
     }
 }
 
