@@ -5,11 +5,12 @@
   "main": "server.js",
   "scripts": {
     "start": "node --max-old-space-size=512 server.js",
-    "build": "npm install && cd quiz-game-frontend && npm install && npm run build",
+    "build": "npm install --legacy-peer-deps && cd quiz-game-frontend && npm install --legacy-peer-deps && npm run build",
     "dev": "nodemon server.js",
     "client": "cd quiz-game-frontend && npm start",
     "dev:full": "concurrently \"npm run dev\" \"npm run client\"",
-    "postinstall": "cd quiz-game-frontend && npm install"
+    "postinstall": "cd quiz-game-frontend && npm install --legacy-peer-deps",
+    "clean": "rimraf node_modules quiz-game-frontend/node_modules package-lock.json quiz-game-frontend/package-lock.json"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -22,7 +23,8 @@
   "devDependencies": {
     "concurrently": "^8.0.1",
     "cross-env": "^7.0.3",
-    "nodemon": "^2.0.22"
+    "nodemon": "^2.0.22",
+    "rimraf": "^5.0.1"
   },
   "engines": {
     "node": "16.20.0",

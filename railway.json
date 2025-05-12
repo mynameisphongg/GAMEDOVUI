@@ -2,7 +2,13 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm run build"
+    "buildCommand": "npm run clean && npm run build",
+    "watchPatterns": [
+      "package.json",
+      "package-lock.json",
+      "quiz-game-frontend/package.json",
+      "quiz-game-frontend/package-lock.json"
+    ]
   },
   "deploy": {
     "startCommand": "npm start",
@@ -12,6 +18,10 @@
     "restartPolicyMaxRetries": 10,
     "numReplicas": 1,
     "startTimeout": 900,
-    "healthcheckInterval": 60
+    "healthcheckInterval": 60,
+    "env": {
+      "NODE_ENV": "production",
+      "NODE_OPTIONS": "--max-old-space-size=512"
+    }
   }
 }
