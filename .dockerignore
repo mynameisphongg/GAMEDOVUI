@@ -1,68 +1,49 @@
 # Dependencies
 node_modules
-quiz-game-frontend/node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
 
-# Build outputs
-quiz-game-frontend/build
-build
+# Version control
+.git
+.gitignore
+.gitattributes
 
-# Environment files
+# Environment variables
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.development
+.env.test
+.env.production
 
-# Debug logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# IDE
+# IDE and OS files
 .idea
 .vscode
+.DS_Store
 *.swp
 *.swo
 
-# OS
-.DS_Store
-Thumbs.db
+# Build and logs
+build
+dist
+logs
+*.log
 
-# Git
-.git
-.gitignore
-
-# Test coverage
+# Test files
 coverage
 .nyc_output
-
-# Temporary files
-*.log
-*.tmp
-*.temp
+test
+__tests__
+*.test.js
+*.spec.js
 
 # Documentation
 README.md
 CHANGELOG.md
-docs/
+docs
+*.md
 
-# Development tools
-.eslintrc
-.prettierrc
-.editorconfig
-tsconfig.json
-jest.config.js
-
-# Test coverage
-node_modules
-npm-debug.log
-quiz-game-frontend/node_modules
-quiz-game-frontend/build
-.git
-.gitignore
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.DS_Store 
+# Temporary files
+tmp
+temp
+.cache 

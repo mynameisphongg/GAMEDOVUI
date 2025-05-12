@@ -8,8 +8,8 @@ RUN apk add --no-cache python3 make g++ git
 # Copy frontend package files
 COPY quiz-game-frontend/package*.json ./
 
-# Install frontend dependencies
-RUN npm install --legacy-peer-deps
+# Install frontend dependencies with specific flags
+RUN npm install --legacy-peer-deps --no-audit --no-fund --loglevel=error
 
 # Copy frontend source
 COPY quiz-game-frontend/ ./
@@ -30,12 +30,13 @@ RUN apk add --no-cache tini curl bash
 # Create app user and group
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
-# Copy backend package files
+# Copy package files first to leverage Docker cache
 COPY package*.json ./
 
-# Install backend dependencies
-RUN npm install --legacy-peer-deps && \
-    npm cache clean --force
+# Install backend dependencies with specific flags and cleanup
+RUN npm install --legacy-peer-deps --no-audit --no-fund --loglevel=error && \
+    npm cache clean --force && \
+    rm -rf /root/.npm
 
 # Copy backend source
 COPY . .
