@@ -24,8 +24,8 @@ RUN npm run build
 FROM node:16.20.0-alpine
 WORKDIR /app
 
-# Install production dependencies for the backend
-RUN apk add --no-cache tini curl
+# Install production dependencies
+RUN apk add --no-cache tini curl bash
 
 # Create app user and group
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
@@ -34,7 +34,8 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY package*.json ./
 
 # Install backend dependencies
-RUN npm install --legacy-peer-deps && npm cache clean --force
+RUN npm install --legacy-peer-deps && \
+    npm cache clean --force
 
 # Copy backend source
 COPY . .
@@ -47,8 +48,9 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
-# Set proper permissions
-RUN chown -R appuser:appgroup /app && \
+# Make start.sh executable and set proper permissions
+RUN chmod +x start.sh && \
+    chown -R appuser:appgroup /app && \
     chmod -R 755 /app
 
 # Use tini as init process
@@ -57,12 +59,12 @@ ENTRYPOINT ["/sbin/tini", "--"]
 # Switch to non-root user
 USER appuser
 
-# Add healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+# Add healthcheck with more lenient settings
+HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=5 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Expose port
-EXPOSE 3000
+EXPOSE ${PORT}
 
 # Start the application using the startup script
-CMD ["node", "server.js"]
+CMD ["./start.sh"]
