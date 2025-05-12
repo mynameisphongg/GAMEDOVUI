@@ -35,14 +35,9 @@ if [ ! -f "server.js" ]; then
     exit 1
 fi
 
-if [ ! -d "quiz-game-frontend/build" ]; then
-    echo "Error: Frontend build directory not found"
-    exit 1
-fi
-
 if [ ! -d "node_modules" ]; then
-    echo "Error: node_modules directory not found"
-    exit 1
+    echo "Installing dependencies..."
+    npm install --legacy-peer-deps
 fi
 
 # Check MongoDB URI
@@ -98,33 +93,38 @@ done
 
 if [ $attempt -gt $max_attempts ]; then
     echo "MongoDB connection failed after $max_attempts attempts"
-    echo "Last error:"
-    node -e "
-        const mongoose = require('mongoose');
-        mongoose.connect(process.env.MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000,
-            heartbeatFrequencyMS: 2000,
-            keepAlive: true,
-            keepAliveInitialDelay: 300000
-        })
-        .catch(err => {
-            console.error(err);
-            process.exit(1);
-        });
-    "
     exit 1
 fi
 
-# Build the frontend
-echo "=== Building Frontend ==="
-cd quiz-game-frontend && npm install && npm run build
-
 # Start the application with proper error handling
 echo "=== Starting Server ==="
-node --trace-warnings server.js & # Use & to run the Node process in background
+NODE_ENV=production node --trace-warnings server.js &
 NODE_PID=$!
 
-# Wait for the Node process to keep running
-wait $NODE_PID
+# Wait for the server to be ready
+echo "Waiting for server to be ready..."
+max_wait=30
+wait_attempt=1
+while [ $wait_attempt -le $max_wait ]; do
+    if curl -s http://localhost:$PORT/health > /dev/null; then
+        echo "Server is ready!"
+        break
+    fi
+    echo "Server not ready yet, waiting... ($wait_attempt/$max_wait)"
+    wait_attempt=$((wait_attempt + 1))
+    sleep 2
+done
+
+if [ $wait_attempt -gt $max_wait ]; then
+    echo "Server failed to start within $max_wait attempts"
+    exit 1
+fi
+
+# Keep the script running and monitor the Node process
+while kill -0 $NODE_PID 2>/dev/null; do
+    sleep 1
+done
+
+# If we get here, the Node process has died
+echo "Node process died unexpectedly"
+exit 1
