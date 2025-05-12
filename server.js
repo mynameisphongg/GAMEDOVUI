@@ -10,6 +10,7 @@ let server = null;
 let isShuttingDown = false;
 let connectionAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
+let isServerReady = false;
 
 // Middleware
 app.use((req, res, next) => {
@@ -48,12 +49,13 @@ app.use(cors({
 // Health check endpoint
 app.get('/health', (req, res) => {
     const health = {
-        status: 'ok',
+        status: isServerReady ? 'ok' : 'starting',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         memory: process.memoryUsage(),
         dbState: mongoose.connection.readyState,
-        connectionAttempts
+        connectionAttempts,
+        isServerReady
     };
     
     if (mongoose.connection.readyState !== 1) {
@@ -61,7 +63,9 @@ app.get('/health', (req, res) => {
         health.dbState = 'disconnected';
     }
     
-    res.status(mongoose.connection.readyState === 1 ? 200 : 503).json(health);
+    // Return 200 only if both server and DB are ready
+    const statusCode = (isServerReady && mongoose.connection.readyState === 1) ? 200 : 503;
+    res.status(statusCode).json(health);
 });
 
 // API Routes
@@ -103,7 +107,7 @@ async function connectWithRetry() {
         await mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000,
+            serverSelectionTimeoutMS: 10000,
             heartbeatFrequencyMS: 2000,
             keepAlive: true,
             keepAliveInitialDelay: 300000
@@ -111,7 +115,7 @@ async function connectWithRetry() {
         console.log('✅ Connected to MongoDB');
         
         if (!server) {
-            startServer();
+            await startServer();
         }
     } catch (err) {
         console.error('❌ MongoDB connection error:', err.message);
@@ -125,19 +129,38 @@ async function connectWithRetry() {
     }
 }
 
-function startServer() {
-    server = app.listen(PORT, '0.0.0.0', () => {
-        console.log(`🚀 Server is running on port ${PORT}`);
-    });
+async function startServer() {
+    return new Promise((resolve, reject) => {
+        try {
+            server = app.listen(PORT, '0.0.0.0', () => {
+                console.log(`🚀 Server is running on port ${PORT}`);
+                isServerReady = true;
+                console.log('✅ Server is ready to accept connections');
+                resolve();
+            });
 
-    server.on('error', (err) => {
-        console.error('❌ Server error:', err.message);
-        if (err.code === 'EADDRINUSE') {
-            console.log('Port is in use, retrying in 5 seconds...');
-            setTimeout(() => {
-                server.close();
-                startServer();
-            }, 5000);
+            server.on('error', (err) => {
+                console.error('❌ Server error:', err.message);
+                if (err.code === 'EADDRINUSE') {
+                    console.log('Port is in use, retrying in 5 seconds...');
+                    setTimeout(() => {
+                        server.close();
+                        startServer().catch(reject);
+                    }, 5000);
+                } else {
+                    reject(err);
+                }
+            });
+
+            // Handle server close
+            server.on('close', () => {
+                isServerReady = false;
+                console.log('Server closed');
+            });
+
+        } catch (err) {
+            console.error('Failed to start server:', err);
+            reject(err);
         }
     });
 }
@@ -145,6 +168,7 @@ function startServer() {
 async function gracefulShutdown() {
     console.log('🛑 Graceful shutdown initiated...');
     isShuttingDown = true;
+    isServerReady = false;
 
     if (server) {
         await new Promise((resolve) => {
@@ -178,4 +202,8 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Start the application
-connectWithRetry();
+console.log('Starting application...');
+connectWithRetry().catch(err => {
+    console.error('Failed to start application:', err);
+    process.exit(1);
+});
