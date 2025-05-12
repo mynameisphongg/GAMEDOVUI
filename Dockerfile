@@ -5,11 +5,17 @@ WORKDIR /app/frontend
 # Install build dependencies
 RUN apk add --no-cache python3 make g++ git
 
+# Set NODE_OPTIONS to limit memory usage
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 # Copy frontend package files
 COPY quiz-game-frontend/package*.json ./
 
-# Install frontend dependencies with specific flags
-RUN npm install --legacy-peer-deps --no-audit --no-fund --loglevel=error
+# Install frontend dependencies with specific flags and memory optimization
+RUN npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm install --legacy-peer-deps --no-audit --no-fund --loglevel=error --prefer-offline && \
+    npm cache clean --force
 
 # Copy frontend source
 COPY quiz-game-frontend/ ./
@@ -30,13 +36,19 @@ RUN apk add --no-cache tini curl bash
 # Create app user and group
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
+# Set NODE_OPTIONS to limit memory usage
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 # Copy package files first to leverage Docker cache
 COPY package*.json ./
 
-# Install backend dependencies with specific flags and cleanup
-RUN npm install --legacy-peer-deps --no-audit --no-fund --loglevel=error && \
+# Install backend dependencies with specific flags and memory optimization
+RUN npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000 && \
+    npm install --legacy-peer-deps --no-audit --no-fund --loglevel=error --prefer-offline && \
     npm cache clean --force && \
-    rm -rf /root/.npm
+    rm -rf /root/.npm && \
+    rm -rf /root/.cache
 
 # Copy backend source
 COPY . .
@@ -47,7 +59,6 @@ COPY --from=frontend-builder /app/frontend/build ./quiz-game-frontend/build
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Make start.sh executable and set proper permissions
 RUN chmod +x start.sh && \
