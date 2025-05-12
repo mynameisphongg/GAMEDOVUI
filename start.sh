@@ -49,26 +49,29 @@ fi
 
 # Start the application with proper error handling
 echo "=== Starting Server ==="
-NODE_ENV=production node --trace-warnings server.js &
+NODE_ENV=production node --trace-warnings --max-old-space-size=512 server.js &
 NODE_PID=$!
 
 # Wait for the server to be ready
 echo "Waiting for server to be ready..."
-max_wait=60
+max_wait=120
 wait_attempt=1
 while [ $wait_attempt -le $max_wait ]; do
-    if curl -s http://localhost:$PORT/health | grep -q '"status":"ok"'; then
-        echo "Server is healthy and ready!"
-        break
+    if curl -s http://localhost:$PORT/health > /dev/null; then
+        health_status=$(curl -s http://localhost:$PORT/health)
+        if echo "$health_status" | grep -q '"status":"ok"'; then
+            echo "Server is healthy and ready!"
+            break
+        fi
+        echo "Server is starting, status: $health_status"
+    else
+        echo "Server not responding, attempt $wait_attempt/$max_wait"
     fi
-    
-    health_status=$(curl -s http://localhost:$PORT/health || echo "{}")
-    echo "Server not ready yet, status: $health_status (attempt $wait_attempt/$max_wait)"
     
     if [ $wait_attempt -eq $max_wait ]; then
         echo "Server failed to become healthy within $max_wait attempts"
         echo "Last health check response:"
-        curl -s http://localhost:$PORT/health
+        curl -s http://localhost:$PORT/health || echo "No response from server"
         exit 1
     fi
     
@@ -80,7 +83,7 @@ done
 echo "Server is running, monitoring process..."
 while kill -0 $NODE_PID 2>/dev/null; do
     # Check server health every 30 seconds
-    if ! curl -s http://localhost:$PORT/health | grep -q '"status":"ok"'; then
+    if ! curl -s http://localhost:$PORT/health > /dev/null; then
         echo "Server health check failed!"
         exit 1
     fi

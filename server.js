@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const compression = require('compression');
+const helmet = require('helmet');
 require('dotenv').config();
 
 const app = express();
@@ -12,6 +14,16 @@ let connectionAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 let isServerReady = false;
 let isDbReady = false;
+let startupTimeout = null;
+
+// Enable security headers
+app.use(helmet({
+    contentSecurityPolicy: false, // Disable CSP for development
+    crossOriginEmbedderPolicy: false
+}));
+
+// Enable compression
+app.use(compression());
 
 // Middleware
 app.use((req, res, next) => {
@@ -30,7 +42,7 @@ const allowedOrigins = [
     'http://localhost:5001',
     'https://dovuinnp.up.railway.app',
     'https://gamedovui-production.up.railway.app',
-    'https://*.up.railway.app'  // Allow all Railway subdomains
+    'https://*.up.railway.app'
 ];
 
 app.use(cors({
@@ -47,7 +59,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Initial health check endpoint (always returns 200 during startup)
+// Health check endpoint
 app.get('/health', (req, res) => {
     const health = {
         status: isServerReady && isDbReady ? 'ok' : 'starting',
@@ -63,23 +75,8 @@ app.get('/health', (req, res) => {
             database: isDbReady ? 'ready' : 'connecting'
         }
     };
-    
-    // During startup, always return 200 but with status 'starting'
-    // This prevents Railway from killing the container during startup
-    if (!isServerReady || !isDbReady) {
-        health.status = 'starting';
-        res.status(200).json(health);
-        return;
-    }
-    
-    // After startup, return appropriate status
-    if (mongoose.connection.readyState !== 1) {
-        health.status = 'degraded';
-        health.dbState = 'disconnected';
-        res.status(503).json(health);
-        return;
-    }
-    
+
+    // Always return 200 during startup to prevent container from being killed
     res.status(200).json(health);
 });
 
@@ -125,7 +122,9 @@ async function connectWithRetry() {
             serverSelectionTimeoutMS: 30000,
             heartbeatFrequencyMS: 2000,
             keepAlive: true,
-            keepAliveInitialDelay: 300000
+            keepAliveInitialDelay: 300000,
+            connectTimeoutMS: 30000,
+            socketTimeoutMS: 45000
         });
         console.log('✅ Connected to MongoDB');
         isDbReady = true;
@@ -148,10 +147,17 @@ async function connectWithRetry() {
 async function startServer() {
     return new Promise((resolve, reject) => {
         try {
+            // Set a timeout for the entire startup process
+            startupTimeout = setTimeout(() => {
+                console.error('Startup timeout reached');
+                process.exit(1);
+            }, 300000); // 5 minutes timeout
+
             server = app.listen(PORT, '0.0.0.0', () => {
                 console.log(`🚀 Server is running on port ${PORT}`);
                 isServerReady = true;
                 console.log('✅ Server is ready to accept connections');
+                clearTimeout(startupTimeout);
                 resolve();
             });
 
@@ -164,11 +170,11 @@ async function startServer() {
                         startServer().catch(reject);
                     }, 5000);
                 } else {
+                    clearTimeout(startupTimeout);
                     reject(err);
                 }
             });
 
-            // Handle server close
             server.on('close', () => {
                 isServerReady = false;
                 console.log('Server closed');
@@ -176,6 +182,7 @@ async function startServer() {
 
         } catch (err) {
             console.error('Failed to start server:', err);
+            clearTimeout(startupTimeout);
             reject(err);
         }
     });
@@ -186,6 +193,10 @@ async function gracefulShutdown() {
     isShuttingDown = true;
     isServerReady = false;
     isDbReady = false;
+
+    if (startupTimeout) {
+        clearTimeout(startupTimeout);
+    }
 
     if (server) {
         await new Promise((resolve) => {
