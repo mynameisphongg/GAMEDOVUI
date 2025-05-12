@@ -117,10 +117,14 @@ if [ $attempt -gt $max_attempts ]; then
     exit 1
 fi
 
+# Build the frontend
+echo "=== Building Frontend ==="
+cd quiz-game-frontend && npm install && npm run build
+
 # Start the application with proper error handling
 echo "=== Starting Server ==="
-node --trace-warnings server.js &
+node --trace-warnings server.js & # Use & to run the Node process in background
 NODE_PID=$!
 
-# Wait for the Node process
-wait $NODE_PID 
+# Wait for the Node process to keep running
+wait $NODE_PID

@@ -24,7 +24,7 @@ RUN npm run build
 FROM node:16.20.0-alpine
 WORKDIR /app
 
-# Install production dependencies
+# Install production dependencies for the backend
 RUN apk add --no-cache tini curl
 
 # Create app user and group
@@ -34,8 +34,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY package*.json ./
 
 # Install backend dependencies
-RUN npm install --legacy-peer-deps && \
-    npm cache clean --force
+RUN npm install --legacy-peer-deps && npm cache clean --force
 
 # Copy backend source
 COPY . .
@@ -50,8 +49,7 @@ ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Set proper permissions
 RUN chown -R appuser:appgroup /app && \
-    chmod -R 755 /app && \
-    chmod +x start.sh
+    chmod -R 755 /app
 
 # Use tini as init process
 ENTRYPOINT ["/sbin/tini", "--"]
@@ -67,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 EXPOSE 3000
 
 # Start the application using the startup script
-CMD ["./start.sh"] 
+CMD ["node", "server.js"]
