@@ -9,9 +9,8 @@ RUN npm run build
 # 2. Build backend
 FROM node:16.20.0 AS backend
 WORKDIR /app
-COPY package*.json ./
-RUN npm install --legacy-peer-deps
 COPY . .
+RUN npm install --legacy-peer-deps
 
 # Copy built frontend into backend's static folder
 RUN rm -rf ./quiz-game-frontend/build && \
