@@ -2,13 +2,14 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm run clean && npm run build",
+    "buildCommand": "npm run clean && npm install --legacy-peer-deps && cd quiz-game-frontend && npm install --legacy-peer-deps && npm run build",
     "watchPatterns": [
       "package.json",
       "package-lock.json",
       "quiz-game-frontend/package.json",
       "quiz-game-frontend/package-lock.json"
-    ]
+    ],
+    "dockerfile": false
   },
   "deploy": {
     "startCommand": "npm start",

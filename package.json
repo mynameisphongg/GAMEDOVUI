@@ -10,7 +10,7 @@
     "client": "cd quiz-game-frontend && npm start",
     "dev:full": "concurrently \"npm run dev\" \"npm run client\"",
     "postinstall": "cd quiz-game-frontend && npm install --legacy-peer-deps",
-    "clean": "rimraf node_modules quiz-game-frontend/node_modules package-lock.json quiz-game-frontend/package-lock.json"
+    "clean": "if exist node_modules rmdir /s /q node_modules && if exist quiz-game-frontend\\node_modules rmdir /s /q quiz-game-frontend\\node_modules && if exist package-lock.json del /f /q package-lock.json && if exist quiz-game-frontend\\package-lock.json del /f /q quiz-game-frontend\\package-lock.json"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -23,8 +23,7 @@
   "devDependencies": {
     "concurrently": "^8.0.1",
     "cross-env": "^7.0.3",
-    "nodemon": "^2.0.22",
-    "rimraf": "^5.0.1"
+    "nodemon": "^2.0.22"
   },
   "engines": {
     "node": "16.20.0",
