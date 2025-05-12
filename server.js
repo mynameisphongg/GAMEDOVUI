@@ -11,6 +11,7 @@ let isShuttingDown = false;
 let connectionAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 let isServerReady = false;
+let isDbReady = false;
 
 // Middleware
 app.use((req, res, next) => {
@@ -46,26 +47,40 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// Health check endpoint
+// Initial health check endpoint (always returns 200 during startup)
 app.get('/health', (req, res) => {
     const health = {
-        status: isServerReady ? 'ok' : 'starting',
+        status: isServerReady && isDbReady ? 'ok' : 'starting',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         memory: process.memoryUsage(),
         dbState: mongoose.connection.readyState,
         connectionAttempts,
-        isServerReady
+        isServerReady,
+        isDbReady,
+        startupProgress: {
+            server: isServerReady ? 'ready' : 'starting',
+            database: isDbReady ? 'ready' : 'connecting'
+        }
     };
     
+    // During startup, always return 200 but with status 'starting'
+    // This prevents Railway from killing the container during startup
+    if (!isServerReady || !isDbReady) {
+        health.status = 'starting';
+        res.status(200).json(health);
+        return;
+    }
+    
+    // After startup, return appropriate status
     if (mongoose.connection.readyState !== 1) {
         health.status = 'degraded';
         health.dbState = 'disconnected';
+        res.status(503).json(health);
+        return;
     }
     
-    // Return 200 only if both server and DB are ready
-    const statusCode = (isServerReady && mongoose.connection.readyState === 1) ? 200 : 503;
-    res.status(statusCode).json(health);
+    res.status(200).json(health);
 });
 
 // API Routes
@@ -107,12 +122,13 @@ async function connectWithRetry() {
         await mongoose.connect(process.env.MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 10000,
+            serverSelectionTimeoutMS: 30000,
             heartbeatFrequencyMS: 2000,
             keepAlive: true,
             keepAliveInitialDelay: 300000
         });
         console.log('✅ Connected to MongoDB');
+        isDbReady = true;
         
         if (!server) {
             await startServer();
@@ -169,6 +185,7 @@ async function gracefulShutdown() {
     console.log('🛑 Graceful shutdown initiated...');
     isShuttingDown = true;
     isServerReady = false;
+    isDbReady = false;
 
     if (server) {
         await new Promise((resolve) => {
